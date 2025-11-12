@@ -9,47 +9,101 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const moment = require('moment');
 const { Op, fn, col } = require('sequelize');
-const { sequelize } = require('../config/database');
-const { Course, Producer, User, Sale, CourseProgress } = require('../models');
+const { Course, Producer, User, Sale } = require('../models');
+const { SALE_STATUS } = require('../utils/constants');
+
+const buildSalesWhereClause = ({ startDate, endDate, courseId }) => {
+  const whereClause = {};
+
+  if (startDate && endDate) {
+    whereClause.saleDate = {
+      [Op.between]: [new Date(startDate), new Date(endDate)]
+    };
+  } else if (startDate) {
+    whereClause.saleDate = { [Op.gte]: new Date(startDate) };
+  } else if (endDate) {
+    whereClause.saleDate = { [Op.lte]: new Date(endDate) };
+  }
+
+  if (courseId) {
+    whereClause.courseId = courseId;
+  }
+
+  return whereClause;
+};
+
+const getSalesInclude = (producerId) => {
+  const producerInclude = {
+    model: Producer,
+    as: 'producer',
+    required: false
+  };
+
+  if (producerId) {
+    producerInclude.where = { id: producerId };
+    producerInclude.required = true;
+  }
+
+  return [
+    {
+      model: Course,
+      as: 'course',
+      required: true,
+      include: [producerInclude]
+    },
+    {
+      model: User,
+      as: 'user',
+      required: true
+    }
+  ];
+};
+
+const fetchSalesWithRelations = async (filters = {}) => {
+  const whereClause = buildSalesWhereClause(filters);
+  return Sale.findAll({
+    where: whereClause,
+    include: getSalesInclude(filters.producerId),
+    order: [['saleDate', 'DESC']]
+  });
+};
+
+const formatCurrency = (value) => `$${Number(value || 0).toFixed(2)}`;
+
+const formatStatusLabel = (status) => {
+  switch (status) {
+    case SALE_STATUS.COMPLETED:
+      return 'Completada';
+    case SALE_STATUS.PENDING:
+      return 'Pendiente';
+    case SALE_STATUS.CANCELLED:
+      return 'Cancelada';
+    default:
+      return status || 'Sin estado';
+  }
+};
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case SALE_STATUS.COMPLETED:
+      return '#10b981';
+    case SALE_STATUS.CANCELLED:
+      return '#ef4444';
+    default:
+      return '#f59e0b';
+  }
+};
+
+const formatDateTime = (value, format = 'DD/MM/YYYY HH:mm', fallback = 'Sin registro') => {
+  if (!value) return fallback;
+  return moment(value).format(format);
+};
 
 // Exportar reporte de ventas a Excel
 router.get('/excel/sales', async (req, res) => {
   try {
     const { startDate, endDate, courseId, producerId } = req.query;
-    
-    // Construir filtros
-    let whereClause = {};
-    if (startDate && endDate) {
-      whereClause.saleDate = {
-        [Op.between]: [new Date(startDate), new Date(endDate)]
-      };
-    }
-    if (courseId) {
-      whereClause.courseId = courseId;
-    }
-
-    // Obtener datos de ventas
-    const sales = await Sale.findAll({
-      where: whereClause,
-      include: [
-        {
-          model: Course,
-          as: 'course',
-          include: [
-            {
-              model: Producer,
-              as: 'producer',
-              where: producerId ? { id: producerId } : {}
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'user'
-        }
-      ],
-      order: [['saleDate', 'DESC']]
-    });
+    const sales = await fetchSalesWithRelations({ startDate, endDate, courseId, producerId });
 
     // Crear libro de Excel
     const workbook = new ExcelJS.Workbook();
@@ -80,18 +134,18 @@ router.get('/excel/sales', async (req, res) => {
     sales.forEach(sale => {
       worksheet.addRow({
         saleId: sale.id,
-        date: moment(sale.saleDate).format('DD/MM/YYYY HH:mm'),
-        user: sale.user.name,
-        userEmail: sale.user.email,
-        course: sale.course.title,
-        producer: sale.course.producer.name,
-        amount: `$${sale.amount}`,
-        status: sale.status
+        date: formatDateTime(sale.saleDate),
+        user: sale.user?.name || 'Sin usuario',
+        userEmail: sale.user?.email || 'Sin email',
+        course: sale.course?.title || 'Curso sin titulo',
+        producer: sale.course?.producer?.name || 'Instructor no asignado',
+        amount: formatCurrency(sale.amount),
+        status: formatStatusLabel(sale.status)
       });
     });
 
     // Agregar totales
-    const totalAmount = sales.reduce((sum, sale) => sum + parseFloat(sale.amount), 0);
+    const totalAmount = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
     worksheet.addRow({});
     worksheet.addRow({
       saleId: '',
@@ -100,7 +154,7 @@ router.get('/excel/sales', async (req, res) => {
       userEmail: '',
       course: '',
       producer: 'TOTAL:',
-      amount: `$${totalAmount.toFixed(2)}`,
+      amount: formatCurrency(totalAmount),
       status: ''
     });
 
@@ -151,15 +205,19 @@ router.get('/excel/users', async (req, res) => {
         }
       ],
       attributes: [
-        'id', 'name', 'email', 'status', 'lastActivity', 'createdAt',
+        'id',
+        'name',
+        'email',
+        'status',
+        'lastActivity',
+        'createdAt',
         [fn('COUNT', col('sales.id')), 'totalPurchases'],
-        [fn('SUM', col('sales.amount')), 'totalSpent']
+        [fn('SUM', col('sales.monto')), 'totalSpent']
       ],
       group: ['User.id'],
       order: [['lastActivity', 'DESC']]
     });
 
-    // Crear libro de Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Usuarios Activos');
 
@@ -168,13 +226,12 @@ router.get('/excel/users', async (req, res) => {
       { header: 'Nombre', key: 'name', width: 25 },
       { header: 'Email', key: 'email', width: 30 },
       { header: 'Estado', key: 'status', width: 12 },
-      { header: 'Última Actividad', key: 'lastActivity', width: 18 },
+      { header: 'Ultima Actividad', key: 'lastActivity', width: 18 },
       { header: 'Registro', key: 'createdAt', width: 15 },
       { header: 'Compras Totales', key: 'totalPurchases', width: 15 },
       { header: 'Monto Total Gastado', key: 'totalSpent', width: 18 }
     ];
 
-    // Estilo del encabezado
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
       type: 'pattern',
@@ -184,15 +241,18 @@ router.get('/excel/users', async (req, res) => {
     worksheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
 
     users.forEach(user => {
+      const totalPurchases = parseInt(user.getDataValue('totalPurchases'), 10) || 0;
+      const totalSpent = Number(user.getDataValue('totalSpent') || 0);
+
       worksheet.addRow({
         id: user.id,
         name: user.name,
         email: user.email,
-        status: user.status,
-        lastActivity: moment(user.lastActivity).format('DD/MM/YYYY HH:mm'),
-        createdAt: moment(user.createdAt).format('DD/MM/YYYY'),
-        totalPurchases: user.getDataValue('totalPurchases') || 0,
-        totalSpent: `$${(user.getDataValue('totalSpent') || 0).toFixed(2)}`
+        status: user.status ? 'Activo' : 'Inactivo',
+        lastActivity: formatDateTime(user.lastActivity),
+        createdAt: formatDateTime(user.createdAt, 'DD/MM/YYYY'),
+        totalPurchases,
+        totalSpent: formatCurrency(totalSpent)
       });
     });
 
@@ -215,114 +275,74 @@ router.get('/excel/users', async (req, res) => {
 router.get('/pdf/sales', async (req, res) => {
   try {
     const { startDate, endDate, courseId, producerId } = req.query;
-    
-    // Datos simulados para evitar errores de DB por ahora
-    const mockSales = [
-      {
-        id: 1,
-        saleDate: new Date('2024-11-01'),
-        amount: 200,
-        status: 'completed',
-        user: { name: 'Ana García', email: 'ana@example.com' },
-        course: { 
-          title: 'JavaScript Avanzado',
-          producer: { name: 'TechAcademy Pro' }
-        }
-      },
-      {
-        id: 2,
-        saleDate: new Date('2024-11-02'),
-        amount: 200,
-        status: 'completed',
-        user: { name: 'Carlos López', email: 'carlos@example.com' },
-        course: { 
-          title: 'React Fundamentals',
-          producer: { name: 'CodeMaster Studio' }
-        }
-      },
-      {
-        id: 3,
-        saleDate: new Date('2024-11-03'),
-        amount: 200,
-        status: 'pending',
-        user: { name: 'María Rodriguez', email: 'maria@example.com' },
-        course: { 
-          title: 'Node.js Backend',
-          producer: { name: 'FullStack Academy' }
-        }
-      }
-    ];
 
-    const sales = mockSales;
+    const sales = await fetchSalesWithRelations({ startDate, endDate, courseId, producerId });
 
-    // Crear documento PDF
-    const doc = new PDFDocument({ 
+    const doc = new PDFDocument({
       margin: 50,
       size: 'A4'
     });
     
-    // Configurar respuesta HTTP
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="reporte-ventas-${moment().format('YYYY-MM-DD')}.pdf"`);
     
-    // Pipe el documento a la respuesta
     doc.pipe(res);
 
-    // Título principal
     doc.fontSize(24)
        .fillColor('#1e3a8a')
        .text('Reporte de Ventas', { align: 'center' });
     
     doc.moveDown(1);
 
-    // Información del reporte
     doc.fontSize(12)
        .fillColor('#000000');
     
-    doc.text(`Fecha de generación: ${moment().format('DD/MM/YYYY HH:mm')}`);
+    doc.text(`Fecha de generacion: ${moment().format('DD/MM/YYYY HH:mm')}`);
     
     if (startDate && endDate) {
-      doc.text(`Período: ${moment(startDate).format('DD/MM/YYYY')} - ${moment(endDate).format('DD/MM/YYYY')}`);
+      doc.text(`Periodo: ${moment(startDate).format('DD/MM/YYYY')} - ${moment(endDate).format('DD/MM/YYYY')}`);
     } else {
-      doc.text('Período: Todos los registros');
+      doc.text('Periodo: Todos los registros');
     }
     
     doc.text(`Total de ventas: ${sales.length}`);
     
-    const totalAmount = sales.reduce((sum, sale) => sum + parseFloat(sale.amount), 0);
-    doc.text(`Monto total: $${totalAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`);
+    const totalAmount = sales.reduce((sum, sale) => sum + Number(sale.amount || 0), 0);
+    doc.text(`Monto total: ${formatCurrency(totalAmount)}`);
     
     doc.moveDown(2);
 
-    // Encabezados de tabla
+    if (!sales.length) {
+      doc.fontSize(12)
+         .fillColor('#ef4444')
+         .text('No se encontraron ventas para los filtros seleccionados.', { align: 'center' });
+      doc.end();
+      return;
+    }
+
     const tableTop = doc.y;
-    const itemHeight = 25;
+    const rowHeight = 25;
     
-    // Configurar colores y fuente para encabezados
     doc.fontSize(10)
        .fillColor('#ffffff')
        .rect(50, tableTop, 500, 20)
        .fill('#3b82f6');
     
-    // Texto de encabezados
     doc.fillColor('#ffffff')
        .text('Fecha', 60, tableTop + 5)
        .text('Usuario', 130, tableTop + 5)
        .text('Curso', 220, tableTop + 5)
-       .text('Productor', 350, tableTop + 5)
+       .text('Instructor', 350, tableTop + 5)
        .text('Monto', 450, tableTop + 5)
        .text('Estado', 500, tableTop + 5);
 
     let currentY = tableTop + 25;
     
-    // Filas de datos
     sales.forEach((sale, index) => {
-      // Verificar si necesitamos nueva página
       if (currentY > 750) {
         doc.addPage();
         currentY = 50;
         
-        // Repetir encabezados en nueva página
         doc.fillColor('#ffffff')
            .rect(50, currentY, 500, 20)
            .fill('#3b82f6');
@@ -331,37 +351,33 @@ router.get('/pdf/sales', async (req, res) => {
            .text('Fecha', 60, currentY + 5)
            .text('Usuario', 130, currentY + 5)
            .text('Curso', 220, currentY + 5)
-           .text('Productor', 350, currentY + 5)
+           .text('Instructor', 350, currentY + 5)
            .text('Monto', 450, currentY + 5)
            .text('Estado', 500, currentY + 5);
         
         currentY += 25;
       }
       
-      // Color alternado para filas
       const backgroundColor = index % 2 === 0 ? '#f8fafc' : '#ffffff';
-      doc.rect(50, currentY, 500, itemHeight)
+      doc.rect(50, currentY, 500, rowHeight)
          .fill(backgroundColor);
       
-      // Texto de la fila
       doc.fillColor('#000000')
          .fontSize(9);
       
-      doc.text(moment(sale.saleDate).format('DD/MM/YY'), 60, currentY + 8);
-      doc.text(sale.user.name.substring(0, 20), 130, currentY + 8);
-      doc.text(sale.course.title.substring(0, 25), 220, currentY + 8);
-      doc.text(sale.course.producer.name.substring(0, 15), 350, currentY + 8);
-      doc.text(`$${parseFloat(sale.amount).toFixed(2)}`, 450, currentY + 8);
+      doc.text(formatDateTime(sale.saleDate, 'DD/MM/YY'), 60, currentY + 8);
+      doc.text((sale.user?.name || 'Sin usuario').substring(0, 20), 130, currentY + 8);
+      doc.text((sale.course?.title || 'Sin curso').substring(0, 25), 220, currentY + 8);
+      doc.text((sale.course?.producer?.name || 'Instructor no asignado').substring(0, 20), 350, currentY + 8);
+      doc.text(formatCurrency(sale.amount), 450, currentY + 8);
       
-      // Color del estado
-      const statusColor = sale.status === 'completed' ? '#10b981' : '#f59e0b';
+      const statusColor = getStatusColor(sale.status);
       doc.fillColor(statusColor)
-         .text(sale.status, 500, currentY + 8);
+         .text(formatStatusLabel(sale.status), 500, currentY + 8);
       
-      currentY += itemHeight;
+      currentY += rowHeight;
     });
 
-    // Línea de totales
     currentY += 10;
     doc.moveTo(50, currentY)
        .lineTo(550, currentY)
@@ -370,28 +386,25 @@ router.get('/pdf/sales', async (req, res) => {
     currentY += 15;
     doc.fontSize(11)
        .fillColor('#000000')
-       .text(`TOTAL GENERAL: $${totalAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`, 450, currentY, {
+       .text(`TOTAL GENERAL: ${formatCurrency(totalAmount)}`, 450, currentY, {
          width: 100,
          align: 'right'
        });
 
-    // Footer
     const bottomMargin = 50;
     doc.fontSize(8)
        .fillColor('#6b7280')
-       .text('Generado por Módulo de Reportes - ' + moment().format('DD/MM/YYYY HH:mm'), 
+       .text('Generado por Modulo de Reportes - ' + moment().format('DD/MM/YYYY HH:mm'), 
              50, doc.page.height - bottomMargin, {
                align: 'center',
                width: doc.page.width - 100
              });
 
-    // Finalizar documento
     doc.end();
 
   } catch (error) {
     console.error('Error exportando a PDF:', error);
     
-    // Si ya se envió una respuesta parcial, no podemos enviar JSON
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
@@ -400,5 +413,7 @@ router.get('/pdf/sales', async (req, res) => {
     }
   }
 });
+
+
 
 module.exports = router;

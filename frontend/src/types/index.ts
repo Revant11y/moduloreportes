@@ -98,8 +98,8 @@ export interface CompletionData {
   totalEnrolled: number;
   completed: number;
   inProgress: number;
-  completionRate: string;
-  averageProgress: string;
+  completionRate: number;
+  averageProgress: number;
 }
 
 export interface FilterOptions {

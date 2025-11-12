@@ -1,43 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { databaseService } from '../services/database';
+import React, { useState, useEffect, useCallback } from 'react';
+import { reportsAPI } from '../services/api';
 import { CompletionData } from '../types';
 
 const CompletionReports: React.FC = () => {
   const [completionData, setCompletionData] = useState<CompletionData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     courseId: '',
     producerId: ''
   });
 
-  useEffect(() => {
-    loadCompletionData();
-  }, [filters]);
-
-  const loadCompletionData = async () => {
+  const loadCompletionData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = databaseService.getCompletionRate(filters.courseId, filters.producerId);
-      if (response.success && response.data) {
-        // Adaptar datos al formato esperado
-        const adaptedData: CompletionData[] = response.data.courses.map((course, index) => ({
-          courseId: index + 1, // Simular ID numérico
-          courseTitle: course.courseTitle,
-          producer: "Productor Ejemplo", // Simular productor
-          totalEnrolled: course.enrolled,
-          completed: course.completed,
-          inProgress: course.enrolled - course.completed,
-          completionRate: course.completionRate.toFixed(1) + '%',
-          averageProgress: ((course.completed / course.enrolled) * 100).toFixed(1) + '%'
-        }));
-        setCompletionData(adaptedData);
-      }
+      setError(null);
+      const response = await reportsAPI.getCompletionRate({
+        courseId: filters.courseId || undefined,
+        producerId: filters.producerId || undefined
+      });
+      const adaptedData: CompletionData[] = response.map((course) => ({
+        courseId: course.courseId,
+        courseTitle: course.courseTitle,
+        producer: course.producer,
+        totalEnrolled: course.totalEnrolled,
+        completed: course.completed,
+        inProgress: course.inProgress,
+        completionRate: Number(course.completionRate),
+        averageProgress: Number(course.averageProgress)
+      }));
+      setCompletionData(adaptedData);
     } catch (error) {
       console.error('Error loading completion data:', error);
+      const message = error instanceof Error ? error.message : 'Error cargando tasa de finalizacion';
+      setError(message);
+      setCompletionData([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    loadCompletionData();
+  }, [loadCompletionData]);
 
   if (loading) {
     return (
@@ -54,6 +59,12 @@ const CompletionReports: React.FC = () => {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Reportes de Tasa de Finalización
           </h3>
+
+          {error && (
+            <div className="error-message mb-4">
+              <p>{error}</p>
+            </div>
+          )}
           
           {/* Filtros */}
           <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,17 +137,17 @@ const CompletionReports: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        parseFloat(course.completionRate) >= 70 
+                        course.completionRate >= 70 
                           ? 'bg-green-100 text-green-800'
-                          : parseFloat(course.completionRate) >= 40
+                          : course.completionRate >= 40
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {course.completionRate}%
+                        {course.completionRate.toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {course.averageProgress}%
+                      {course.averageProgress.toFixed(1)}%
                     </td>
                   </tr>
                 ))}

@@ -9,6 +9,7 @@ const router = express.Router();
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 const { Course, Producer, User, Sale, CourseProgress } = require('../models');
+const { SALE_STATUS } = require('../utils/constants');
 
 // Obtener KPIs principales del dashboard
 router.get('/kpis', async (req, res) => {
@@ -24,7 +25,7 @@ router.get('/kpis', async (req, res) => {
         saleDate: {
           [Op.gte]: daysAgo
         },
-        status: 'completed'
+        status: SALE_STATUS.COMPLETED
       }
     });
 
@@ -34,7 +35,7 @@ router.get('/kpis', async (req, res) => {
         saleDate: {
           [Op.gte]: daysAgo
         },
-        status: 'completed'
+        status: SALE_STATUS.COMPLETED
       }
     });
 
@@ -53,15 +54,15 @@ router.get('/kpis', async (req, res) => {
     // Tasa promedio de finalización
     const avgCompletionRate = await CourseProgress.findOne({
       attributes: [
-        [sequelize.fn('AVG', sequelize.col('progress')), 'avgProgress']
+        [sequelize.fn('AVG', sequelize.col('CourseProgress.progreso')), 'avgProgress']
       ]
     });
 
     // Cursos completados en el período
     const completedCourses = await CourseProgress.count({
       where: {
-        completed: true,
         completedAt: {
+          [Op.ne]: null,
           [Op.gte]: daysAgo
         }
       }
@@ -70,18 +71,18 @@ router.get('/kpis', async (req, res) => {
     // Obtener datos para gráfico de ventas por día
     const salesByDay = await Sale.findAll({
       attributes: [
-        [sequelize.fn('DATE', sequelize.col('saleDate')), 'date'],
+        [sequelize.fn('DATE', sequelize.col('Sale.fecha_venta')), 'date'],
         [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-        [sequelize.fn('SUM', sequelize.col('amount')), 'total']
+        [sequelize.fn('SUM', sequelize.col('Sale.monto')), 'total']
       ],
       where: {
         saleDate: {
           [Op.gte]: daysAgo
         },
-        status: 'completed'
+        status: SALE_STATUS.COMPLETED
       },
-      group: [sequelize.fn('DATE', sequelize.col('saleDate'))],
-      order: [[sequelize.fn('DATE', sequelize.col('saleDate')), 'ASC']]
+      group: [sequelize.fn('DATE', sequelize.col('Sale.fecha_venta'))],
+      order: [[sequelize.fn('DATE', sequelize.col('Sale.fecha_venta')), 'ASC']]
     });
 
     // Top 5 cursos más vendidos
@@ -89,7 +90,7 @@ router.get('/kpis', async (req, res) => {
       attributes: [
         'courseId',
         [sequelize.fn('COUNT', sequelize.col('Sale.id')), 'salesCount'],
-        [sequelize.fn('SUM', sequelize.col('Sale.amount')), 'totalRevenue']
+        [sequelize.fn('SUM', sequelize.col('Sale.monto')), 'totalRevenue']
       ],
       include: [
         {
@@ -102,9 +103,9 @@ router.get('/kpis', async (req, res) => {
         saleDate: {
           [Op.gte]: daysAgo
         },
-        status: 'completed'
+        status: SALE_STATUS.COMPLETED
       },
-      group: ['courseId', 'course.id', 'course.title'],
+      group: ['courseId', 'course.id', 'course.titulo'],
       order: [[sequelize.fn('COUNT', sequelize.col('Sale.id')), 'DESC']],
       limit: 5
     });
@@ -150,12 +151,12 @@ router.get('/realtime', async (req, res) => {
 
     const realtimeStats = await Promise.all([
       // Ventas de las últimas 24 horas
-      Sale.count({
-        where: {
-          saleDate: { [Op.gte]: last24Hours },
-          status: 'completed'
-        }
-      }),
+        Sale.count({
+          where: {
+            saleDate: { [Op.gte]: last24Hours },
+            status: SALE_STATUS.COMPLETED
+          }
+        }),
       
       // Usuarios conectados (simulado - en un caso real usarías websockets)
       User.count({
@@ -166,16 +167,19 @@ router.get('/realtime', async (req, res) => {
       
       // Nuevos registros de usuarios
       User.count({
-        where: {
-          createdAt: { [Op.gte]: last24Hours }
-        }
+        where: sequelize.where(
+          sequelize.col('User.created_at'),
+          { [Op.gte]: last24Hours }
+        )
       }),
       
       // Cursos completados hoy
       CourseProgress.count({
         where: {
-          completed: true,
-          completedAt: { [Op.gte]: last24Hours }
+          completedAt: {
+            [Op.ne]: null,
+            [Op.gte]: last24Hours
+          }
         }
       })
     ]);
@@ -228,16 +232,16 @@ router.get('/revenue-chart', async (req, res) => {
 
     const revenueData = await Sale.findAll({
       attributes: [
-        [sequelize.fn('DATE_FORMAT', sequelize.col('saleDate'), dateFormat), 'period'],
-        [sequelize.fn('SUM', sequelize.col('amount')), 'revenue'],
+        [sequelize.fn('DATE_FORMAT', sequelize.col('Sale.fecha_venta'), dateFormat), 'period'],
+        [sequelize.fn('SUM', sequelize.col('Sale.monto')), 'revenue'],
         [sequelize.fn('COUNT', sequelize.col('id')), 'salesCount']
       ],
       where: {
         saleDate: { [Op.gte]: daysAgo },
-        status: 'completed'
+        status: SALE_STATUS.COMPLETED
       },
-      group: [sequelize.fn('DATE_FORMAT', sequelize.col('saleDate'), dateFormat)],
-      order: [[sequelize.fn('DATE_FORMAT', sequelize.col('saleDate'), dateFormat), 'ASC']]
+      group: [sequelize.fn('DATE_FORMAT', sequelize.col('Sale.fecha_venta'), dateFormat)],
+      order: [[sequelize.fn('DATE_FORMAT', sequelize.col('Sale.fecha_venta'), dateFormat), 'ASC']]
     });
 
     res.json({

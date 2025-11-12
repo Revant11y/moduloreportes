@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import ExportButtons from '../components/ExportButtons';
-import { databaseService } from '../services/database';
+import { reportsAPI } from '../services/api';
 
 interface UserMetrics {
   activeUsers: User[];
@@ -19,89 +19,33 @@ const UserReports: React.FC = () => {
   const [period, setPeriod] = useState('30');
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUserData();
-  }, [period]);
-
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Cargar datos desde la base de datos local
-      try {
-        const response = databaseService.getActiveUsers(period);
-        if (response.success && response.data) {
-          // Adaptar los datos al formato esperado por UserMetrics
-          const adaptedData: UserMetrics = {
-            activeUsers: response.data.users.map(user => ({
-              ...user,
-              status: user.status as "active" | "inactive" | "suspended"
-            })),
-            metrics: response.data.metrics
-          };
-          setUserData(adaptedData);
-          return;
-        }
-      } catch (dbError) {
-        console.log('Error cargando desde base de datos local:', dbError);
-      }
-      
-      // Datos simulados como fallback
-      const mockUserData: UserMetrics = {
-        activeUsers: [
-          {
-            id: 1,
-            name: "Ana García",
-            email: "ana.garcia@email.com",
-            status: "active",
-            lastActivity: "2024-11-12T10:30:00Z"
-          },
-          {
-            id: 2,
-            name: "Carlos López",
-            email: "carlos.lopez@email.com",
-            status: "active",
-            lastActivity: "2024-11-12T09:15:00Z"
-          },
-          {
-            id: 3,
-            name: "María Rodríguez",
-            email: "maria.rodriguez@email.com",
-            status: "active",
-            lastActivity: "2024-11-11T16:45:00Z"
-          },
-          {
-            id: 4,
-            name: "Juan Pérez",
-            email: "juan.perez@email.com",
-            status: "active",
-            lastActivity: "2024-11-11T14:20:00Z"
-          },
-          {
-            id: 5,
-            name: "Laura Martínez",
-            email: "laura.martinez@email.com",
-            status: "active",
-            lastActivity: "2024-11-10T11:10:00Z"
-          }
-        ],
-        metrics: {
-          totalUsers: 2340,
-          activeUsers: 1520,
-          inactiveUsers: 820,
-          activityRate: "65.0"
-        }
+      setError(null);
+
+      const response = await reportsAPI.getActiveUsers(period);
+      const adaptedData: UserMetrics = {
+        activeUsers: response.activeUsers.map((user) => ({
+          ...user,
+          status: user.status as 'active' | 'inactive' | 'suspended'
+        })),
+        metrics: response.metrics
       };
-
-      setUserData(mockUserData);
-
+      setUserData(adaptedData);
     } catch (err) {
-      setError('Error cargando datos de usuarios');
+      const message = err instanceof Error ? err.message : 'Error cargando datos de usuarios';
+      setError(message);
       console.error('User reports error:', err);
+      setUserData(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('es-ES');
@@ -117,6 +61,12 @@ const UserReports: React.FC = () => {
         <h1>Usuarios Activos</h1>
         <p>Métricas y análisis de actividad de usuarios</p>
       </div>
+
+      {error && (
+        <div className="error-message">
+          <p>{error}</p>
+        </div>
+      )}
 
       {/* Controles */}
       <div className="controls-section">
@@ -138,12 +88,6 @@ const UserReports: React.FC = () => {
           className="export-buttons"
         />
       </div>
-
-      {error && (
-        <div className="error-message">
-          {error}
-        </div>
-      )}
 
       {/* Métricas generales */}
       {userData && (

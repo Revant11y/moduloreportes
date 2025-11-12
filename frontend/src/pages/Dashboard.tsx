@@ -59,7 +59,7 @@ import TopCoursesChart from '../components/TopCoursesChart';
 import RealtimeStats from '../components/RealtimeStats';
 import { KPIData, ChartData, RealtimeStats as RealtimeStatsType } from '../types';
 import { DollarSign, Users, BookOpen, TrendingUp } from 'lucide-react';
-import { databaseService } from '../services/database';
+import { dashboardAPI } from '../services/api';
 // import { useSocket } from '../services/socket';
 
 const Dashboard: React.FC = () => {
@@ -96,65 +96,16 @@ const Dashboard: React.FC = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
-      // Cargar datos directamente desde la base de datos local
-      try {
-        const [kpiResponse, revenueResponse] = await Promise.all([
-          Promise.resolve(databaseService.getDashboardKPIs()),
-          Promise.resolve(databaseService.getRevenueChart())
-        ]);
-        
-        if (kpiResponse.success && kpiResponse.data) {
-          setKpiData(kpiResponse.data);
-        }
-        
-        if (revenueResponse.success && revenueResponse.data) {
-          setChartData(revenueResponse.data);
-        }
-        
-        await loadRealtimeData();
-        return;
-        
-      } catch (dbError) {
-        console.log('Error cargando desde base de datos local:', dbError);
-      }
-      
-      // Fallback a datos simulados si hay error
-      const mockKpiData: KPIData = {
-        totalRevenue: 125000,
-        salesCount: 245,
-        activeUsers: 1520,
-        totalUsers: 2340,
-        completionRate: 78.5,
-        completedCourses: 89,
-        period: '30'
-      };
+      setError(null);
 
-      const mockChartData: ChartData = {
-        salesByDay: [
-          { date: '2024-11-01', count: 12, total: 2400 },
-          { date: '2024-11-02', count: 15, total: 3200 },
-          { date: '2024-11-03', count: 8, total: 1800 },
-          { date: '2024-11-04', count: 20, total: 4500 },
-          { date: '2024-11-05', count: 18, total: 3900 },
-        ],
-        topCourses: [
-          { courseTitle: 'JavaScript Avanzado', salesCount: 45, totalRevenue: 9000 },
-          { courseTitle: 'React Fundamentals', salesCount: 38, totalRevenue: 7600 },
-          { courseTitle: 'Node.js Backend', salesCount: 32, totalRevenue: 6400 },
-          { courseTitle: 'TypeScript Master', salesCount: 28, totalRevenue: 5600 },
-          { courseTitle: 'Full Stack Development', salesCount: 25, totalRevenue: 800000 },
-          { courseTitle: 'Angular avanzado', salesCount: 26, totalRevenue: 120000 }
-        ]
-      };
+      const { kpis, charts } = await dashboardAPI.getKPIs();
 
-      setKpiData(mockKpiData);
-      setChartData(mockChartData);
-      
+      setKpiData(kpis);
+      setChartData(charts);
       await loadRealtimeData();
-
     } catch (err) {
-      setError('Error cargando datos del dashboard');
+      const message = err instanceof Error ? err.message : 'Error cargando datos del dashboard';
+      setError(message);
       console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
@@ -163,24 +114,8 @@ const Dashboard: React.FC = () => {
 
   const loadRealtimeData = async () => {
     try {
-      // Cargar datos desde el servicio de base de datos local
-      const statsResponse = databaseService.getRealtimeStats();
-      if (statsResponse.success && statsResponse.data) {
-        setRealtimeStats(statsResponse.data);
-        return;
-      }
-
-      // Fallback a simulación si hay error
-      const mockRealtimeStats: RealtimeStatsType = {
-        sales24h: Math.floor(Math.random() * 50) + 10,
-        activeUsers: Math.floor(Math.random() * 100) + 50,
-        newUsers24h: Math.floor(Math.random() * 20) + 5,
-        completions24h: Math.floor(Math.random() * 30) + 10,
-        timestamp: new Date().toISOString()
-      };
-
-      setRealtimeStats(mockRealtimeStats);
-
+      const realtime = await dashboardAPI.getRealtime();
+      setRealtimeStats(realtime);
     } catch (err) {
       console.error('Error loading realtime data:', err);
     }

@@ -25,19 +25,24 @@ router.get('/sales-by-course', async (req, res) => {
       whereClause.courseId = courseId;
     }
 
+    const producerInclude = {
+      model: Producer,
+      as: 'producer',
+      required: false
+    };
+
+    if (producerId) {
+      producerInclude.where = { id: producerId };
+      producerInclude.required = true;
+    }
+
     const salesReport = await Sale.findAll({
       where: whereClause,
       include: [
         {
           model: Course,
           as: 'course',
-          include: [
-            {
-              model: Producer,
-              as: 'producer',
-              where: producerId ? { id: producerId } : {}
-            }
-          ]
+          include: [producerInclude]
         },
         {
           model: User,
@@ -51,13 +56,17 @@ router.get('/sales-by-course', async (req, res) => {
     const salesByCourse = {};
     
     salesReport.forEach(sale => {
-      const courseKey = `${sale.course.id}-${sale.course.title}`;
+      const courseIdValue = sale.course?.id || sale.courseId;
+      const courseTitle = sale.course?.title || 'Curso sin titulo';
+      const producerName = sale.course?.producer?.name || 'Instructor no asignado';
+      const courseKey = `${courseIdValue}-${courseTitle}`;
+      const amountValue = parseFloat(sale.amount) || 0;
       
       if (!salesByCourse[courseKey]) {
         salesByCourse[courseKey] = {
-          courseId: sale.course.id,
-          courseTitle: sale.course.title,
-          producer: sale.course.producer.name,
+          courseId: courseIdValue,
+          courseTitle: courseTitle,
+          producer: producerName,
           totalSales: 0,
           totalRevenue: 0,
           sales: []
@@ -65,11 +74,11 @@ router.get('/sales-by-course', async (req, res) => {
       }
       
       salesByCourse[courseKey].totalSales += 1;
-      salesByCourse[courseKey].totalRevenue += parseFloat(sale.amount);
+      salesByCourse[courseKey].totalRevenue += amountValue;
       salesByCourse[courseKey].sales.push({
         id: sale.id,
-        user: sale.user.name,
-        amount: sale.amount,
+        user: sale.user?.name || 'Sin usuario',
+        amount: amountValue,
         date: sale.saleDate,
         status: sale.status
       });
@@ -81,7 +90,7 @@ router.get('/sales-by-course', async (req, res) => {
       summary: {
         totalCourses: Object.keys(salesByCourse).length,
         totalSales: salesReport.length,
-        totalRevenue: salesReport.reduce((sum, sale) => sum + parseFloat(sale.amount), 0)
+        totalRevenue: salesReport.reduce((sum, sale) => sum + (parseFloat(sale.amount) || 0), 0)
       }
     });
 
@@ -107,19 +116,24 @@ router.get('/sales-by-producer', async (req, res) => {
       };
     }
 
+    const producerInclude = {
+      model: Producer,
+      as: 'producer',
+      required: false
+    };
+
+    if (producerId) {
+      producerInclude.where = { id: producerId };
+      producerInclude.required = true;
+    }
+
     const salesReport = await Sale.findAll({
       where: whereClause,
       include: [
         {
           model: Course,
           as: 'course',
-          include: [
-            {
-              model: Producer,
-              as: 'producer',
-              where: producerId ? { id: producerId } : {}
-            }
-          ]
+          include: [producerInclude]
         }
       ],
       order: [['saleDate', 'DESC']]
@@ -129,31 +143,35 @@ router.get('/sales-by-producer', async (req, res) => {
     const salesByProducer = {};
     
     salesReport.forEach(sale => {
-      const producerKey = `${sale.course.producer.id}-${sale.course.producer.name}`;
+      const producerIdValue = sale.course?.producer?.id || sale.instructorId || 0;
+      const producerName = sale.course?.producer?.name || 'Instructor no asignado';
+      const producerKey = `${producerIdValue}-${producerName}`;
+      const amountValue = parseFloat(sale.amount) || 0;
+      const courseKey = sale.course?.id || sale.courseId;
+      const courseTitle = sale.course?.title || 'Curso sin titulo';
       
       if (!salesByProducer[producerKey]) {
         salesByProducer[producerKey] = {
-          producerId: sale.course.producer.id,
-          producerName: sale.course.producer.name,
+          producerId: producerIdValue,
+          producerName: producerName,
           totalSales: 0,
           totalRevenue: 0,
           courses: {}
         };
       }
       
-      const courseKey = sale.course.id;
       if (!salesByProducer[producerKey].courses[courseKey]) {
         salesByProducer[producerKey].courses[courseKey] = {
-          courseTitle: sale.course.title,
+          courseTitle: courseTitle,
           sales: 0,
           revenue: 0
         };
       }
       
       salesByProducer[producerKey].totalSales += 1;
-      salesByProducer[producerKey].totalRevenue += parseFloat(sale.amount);
+      salesByProducer[producerKey].totalRevenue += amountValue;
       salesByProducer[producerKey].courses[courseKey].sales += 1;
-      salesByProducer[producerKey].courses[courseKey].revenue += parseFloat(sale.amount);
+      salesByProducer[producerKey].courses[courseKey].revenue += amountValue;
     });
 
     // Convertir cursos de objeto a array
@@ -223,18 +241,24 @@ router.get('/completion-rate', async (req, res) => {
   try {
     const { courseId, producerId } = req.query;
 
-    let includeClause = [
+    const producerInclude = {
+      model: Producer,
+      as: 'producer',
+      required: false
+    };
+
+    if (producerId) {
+      producerInclude.where = { id: producerId };
+      producerInclude.required = true;
+    }
+
+    const includeClause = [
       {
         model: Course,
         as: 'course',
-        include: [
-          {
-            model: Producer,
-            as: 'producer',
-            where: producerId ? { id: producerId } : {}
-          }
-        ],
-        where: courseId ? { id: courseId } : {}
+        required: true,
+        include: [producerInclude],
+        ...(courseId ? { where: { id: courseId } } : {})
       }
     ];
 
