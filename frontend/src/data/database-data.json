@@ -1,0 +1,200 @@
+{
+  "timestamp": "2025-11-12T08:44:33.199Z",
+  "kpis": {
+    "totalRevenue": 3889.78,
+    "salesCount": 22,
+    "activeUsers": 6,
+    "totalUsers": 6,
+    "completionRate": 66.7,
+    "completedCourses": 4,
+    "period": "30"
+  },
+  "charts": {
+    "salesByDay": [
+      {
+        "date": "2024-11-10",
+        "count": 1,
+        "total": 159.99
+      },
+      {
+        "date": "2024-11-01",
+        "count": 1,
+        "total": 89.99
+      },
+      {
+        "date": "2024-10-30",
+        "count": 1,
+        "total": 69.99
+      },
+      {
+        "date": "2024-10-25",
+        "count": 1,
+        "total": 349.99
+      },
+      {
+        "date": "2024-10-20",
+        "count": 1,
+        "total": 129.99
+      },
+      {
+        "date": "2024-10-15",
+        "count": 1,
+        "total": 299.99
+      },
+      {
+        "date": "2024-10-05",
+        "count": 1,
+        "total": 159.99
+      },
+      {
+        "date": "2024-10-01",
+        "count": 1,
+        "total": 179.99
+      },
+      {
+        "date": "2024-09-15",
+        "count": 2,
+        "total": 199.98000000000002
+      },
+      {
+        "date": "2024-09-10",
+        "count": 1,
+        "total": 299.99
+      },
+      {
+        "date": "2024-09-05",
+        "count": 1,
+        "total": 89.99
+      },
+      {
+        "date": "2024-09-01",
+        "count": 2,
+        "total": 249.98000000000002
+      },
+      {
+        "date": "2024-08-20",
+        "count": 1,
+        "total": 299.99
+      },
+      {
+        "date": "2024-08-15",
+        "count": 1,
+        "total": 349.99
+      },
+      {
+        "date": "2024-08-10",
+        "count": 1,
+        "total": 129.99
+      },
+      {
+        "date": "2024-08-01",
+        "count": 1,
+        "total": 89.99
+      },
+      {
+        "date": "2024-07-15",
+        "count": 1,
+        "total": 299.99
+      },
+      {
+        "date": "2024-07-10",
+        "count": 1,
+        "total": 179.99
+      },
+      {
+        "date": "2024-07-05",
+        "count": 1,
+        "total": 129.99
+      },
+      {
+        "date": "2024-07-01",
+        "count": 1,
+        "total": 129.99
+      }
+    ],
+    "topCourses": [
+      {
+        "courseTitle": "Python para Data Science",
+        "salesCount": 4,
+        "totalRevenue": 1199.96
+      },
+      {
+        "courseTitle": "Machine Learning Básico",
+        "salesCount": 2,
+        "totalRevenue": 699.98
+      },
+      {
+        "courseTitle": "React Fundamentals",
+        "salesCount": 5,
+        "totalRevenue": 649.95
+      },
+      {
+        "courseTitle": "Node.js Avanzado",
+        "salesCount": 3,
+        "totalRevenue": 539.97
+      },
+      {
+        "courseTitle": "Vue.js Completo",
+        "salesCount": 2,
+        "totalRevenue": 319.98
+      },
+      {
+        "courseTitle": "JavaScript Moderno",
+        "salesCount": 3,
+        "totalRevenue": 269.96999999999997
+      }
+    ]
+  },
+  "activeUsers": {
+    "users": [
+      {
+        "id": 1,
+        "name": "María González",
+        "email": "maria.gonzalez@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-12 00:00:00.000 +00:00"
+      },
+      {
+        "id": 3,
+        "name": "Laura Martín",
+        "email": "laura.martin@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-12 00:00:00.000 +00:00"
+      },
+      {
+        "id": 6,
+        "name": "Carmen Díaz",
+        "email": "carmen.diaz@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-12 00:00:00.000 +00:00"
+      },
+      {
+        "id": 5,
+        "name": "Miguel Ruiz",
+        "email": "miguel.ruiz@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-11 00:00:00.000 +00:00"
+      },
+      {
+        "id": 2,
+        "name": "Juan Pérez",
+        "email": "juan.perez@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-10 00:00:00.000 +00:00"
+      },
+      {
+        "id": 4,
+        "name": "Pedro Sánchez",
+        "email": "pedro.sanchez@email.com",
+        "status": "active",
+        "lastActivity": "2024-11-09 00:00:00.000 +00:00"
+      }
+    ],
+    "metrics": {
+      "totalUsers": 6,
+      "activeUsers": 6,
+      "inactiveUsers": 0,
+      "activityRate": "100.0"
+    }
+  }
+}
