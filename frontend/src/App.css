@@ -885,5 +885,23 @@ body {
   }
 }
 
+.export-feedback {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.export-feedback.success {
+  background-color: rgba(40, 167, 69, 0.12);
+  color: #1e7a34;
+}
+
+.export-feedback.error {
+  background-color: rgba(220, 53, 69, 0.12);
+  color: #a71d2a;
+}
+
 /* Importar fuentes */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');

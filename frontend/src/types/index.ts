@@ -109,3 +109,42 @@ export interface FilterOptions {
   producerId?: number;
   period?: string;
 }
+
+export interface InstructorCourseMetrics {
+  salesCount: number;
+  totalRevenue: number;
+  enrollments: number;
+  avgProgress: number;
+  completedCount: number;
+}
+
+export interface InstructorCourse {
+  id: number;
+  title: string;
+  category: string;
+  level: string;
+  price: number;
+  active: boolean;
+  durationHours: number;
+  instructor: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
+  metrics: InstructorCourseMetrics;
+}
+
+export interface InstructorSummary {
+  totalCourses: number;
+  totalSales: number;
+  totalRevenue: number;
+  totalEnrollments: number;
+}
+
+export interface InstructorOption {
+  id: number;
+  name: string;
+  email?: string;
+  totalSales?: number;
+  totalRevenue?: number;
+}

@@ -5,8 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { Op } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const { Course, Producer, User, Sale, CourseProgress } = require('../models');
+const { SALE_STATUS } = require('../utils/constants');
 
 // Obtener reportes de ventas por curso
 router.get('/sales-by-course', async (req, res) => {
@@ -186,6 +187,141 @@ router.get('/sales-by-producer', async (req, res) => {
 
   } catch (error) {
     console.error('Error obteniendo reporte de ventas por productor:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor'
+    });
+  }
+});
+
+// Filtrar cursos por instructor
+router.get('/courses-by-instructor', async (req, res) => {
+  try {
+    const { instructorId, includeInactive = 'false', category, startDate, endDate } = req.query;
+
+    if (!instructorId) {
+      return res.status(400).json({
+        success: false,
+        error: 'El parámetro instructorId es obligatorio'
+      });
+    }
+
+    const courseFilters = {
+      producerId: instructorId
+    };
+
+    if (includeInactive !== 'true') {
+      courseFilters.status = true;
+    }
+
+    if (category) {
+      courseFilters.category = category;
+    }
+
+    const salesWhere = {
+      status: SALE_STATUS.COMPLETED
+    };
+
+    if (startDate && endDate) {
+      salesWhere.saleDate = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    } else if (startDate) {
+      salesWhere.saleDate = { [Op.gte]: new Date(startDate) };
+    } else if (endDate) {
+      salesWhere.saleDate = { [Op.lte]: new Date(endDate) };
+    }
+
+    const courses = await Course.findAll({
+      where: courseFilters,
+      include: [
+        {
+          model: Producer,
+          as: 'producer',
+          attributes: ['id', 'name', 'email']
+        },
+        {
+          model: Sale,
+          as: 'sales',
+          attributes: [],
+          required: false,
+          where: salesWhere
+        },
+        {
+          model: CourseProgress,
+          as: 'userProgress',
+          attributes: [],
+          required: false
+        }
+      ],
+      attributes: [
+        'id',
+        'title',
+        'price',
+        'status',
+        'category',
+        'durationHours',
+        'level',
+        [fn('COUNT', fn('DISTINCT', col('sales.id'))), 'salesCount'],
+        [fn('SUM', col('sales.monto')), 'totalRevenue'],
+        [fn('COUNT', fn('DISTINCT', col('userProgress.id'))), 'enrollments'],
+        [fn('AVG', col('userProgress.progreso')), 'avgProgress'],
+        [fn('SUM', literal('CASE WHEN `userProgress`.`fecha_completado` IS NOT NULL THEN 1 ELSE 0 END')), 'completedCount']
+      ],
+      group: ['Course.id', 'producer.id'],
+      order: [['title', 'ASC']]
+    });
+
+    const data = courses.map(course => {
+      const salesCount = parseInt(course.get('salesCount'), 10) || 0;
+      const totalRevenue = parseFloat(course.get('totalRevenue')) || 0;
+      const enrollments = parseInt(course.get('enrollments'), 10) || 0;
+      const avgProgress = parseFloat(course.get('avgProgress')) || 0;
+      const completedCount = parseInt(course.get('completedCount'), 10) || 0;
+
+      return {
+        id: course.id,
+        title: course.title,
+        category: course.category,
+        level: course.level,
+        price: Number(course.price),
+        active: Boolean(course.status),
+        durationHours: course.durationHours,
+        instructor: course.producer ? {
+          id: course.producer.id,
+          name: course.producer.name,
+          email: course.producer.email
+        } : null,
+        metrics: {
+          salesCount,
+          totalRevenue,
+          enrollments,
+          avgProgress,
+          completedCount
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data,
+      filters: {
+        instructorId,
+        includeInactive: includeInactive === 'true',
+        category: category || null,
+        startDate: startDate || null,
+        endDate: endDate || null
+      },
+      summary: {
+        totalCourses: data.length,
+        totalSales: data.reduce((sum, course) => sum + course.metrics.salesCount, 0),
+        totalRevenue: data.reduce((sum, course) => sum + course.metrics.totalRevenue, 0),
+        totalEnrollments: data.reduce((sum, course) => sum + course.metrics.enrollments, 0)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error filtrando cursos por instructor:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'

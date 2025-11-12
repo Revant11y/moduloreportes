@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, DollarSign, Users, GraduationCap, TrendingUp } from 'lucide-react';
+import { BarChart3, DollarSign, Users, GraduationCap, TrendingUp, UserCheck } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -9,7 +9,8 @@ const Sidebar: React.FC = () => {
     { path: '/dashboard', label: 'Dashboard', icon: BarChart3 },
     { path: '/sales-reports', label: 'Reportes de Ventas', icon: DollarSign },
     { path: '/user-reports', label: 'Usuarios Activos', icon: Users },
-    { path: '/completion-reports', label: 'Finalización de Cursos', icon: GraduationCap },
+    { path: '/completion-reports', label: 'Finalizacion de Cursos', icon: GraduationCap },
+    { path: '/instructor-courses', label: 'Cursos por Instructor', icon: UserCheck },
   ];
 
   return (

@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import SalesReports from './pages/SalesReports';
 import UserReports from './pages/UserReports';
 import CompletionReports from './pages/CompletionReports';
+import InstructorCourses from './pages/InstructorCourses';
 import Layout from './components/Layout';
 import './App.css';
 
@@ -19,6 +20,7 @@ function App() {
               <Route path="/sales-reports" element={<SalesReports />} />
               <Route path="/user-reports" element={<UserReports />} />
               <Route path="/completion-reports" element={<CompletionReports />} />
+              <Route path="/instructor-courses" element={<InstructorCourses />} />
             </Routes>
           </Layout>
         </div>

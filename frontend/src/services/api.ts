@@ -1,5 +1,15 @@
 import axios, { AxiosError } from 'axios';
-import { ChartData, CompletionData, KPIData, RealtimeStats, SalesReport, User } from '../types';
+import {
+  ChartData,
+  CompletionData,
+  InstructorCourse,
+  InstructorOption,
+  InstructorSummary,
+  KPIData,
+  RealtimeStats,
+  SalesReport,
+  User
+} from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
@@ -34,6 +44,14 @@ export interface SalesFilters {
   endDate?: string;
   courseId?: string;
   producerId?: string;
+}
+
+export interface CoursesByInstructorFilters {
+  instructorId: string;
+  includeInactive?: boolean;
+  category?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ActiveUsersResponse {
@@ -150,6 +168,83 @@ export const reportsAPI = {
         completionRate: Number(course.completionRate),
         averageProgress: Number(course.averageProgress)
       }));
+    } catch (error) {
+      handleError(error);
+      throw error;
+    }
+  },
+
+  async getInstructors(): Promise<InstructorOption[]> {
+    try {
+      const response = await api.get<ApiResponse<Array<{
+        producerId: number;
+        producerName: string;
+        producerEmail?: string;
+        totalSales: number;
+        totalRevenue: number;
+      }>>>('/api/reports/sales-by-producer');
+
+      return response.data.data.map((producer) => ({
+        id: producer.producerId,
+        name: producer.producerName,
+        email: producer.producerEmail,
+        totalSales: Number(producer.totalSales || 0),
+        totalRevenue: Number(producer.totalRevenue || 0)
+      }));
+    } catch (error) {
+      handleError(error);
+      throw error;
+    }
+  },
+
+  async getCoursesByInstructor(filters: CoursesByInstructorFilters) {
+    try {
+      const response = await api.get<ApiResponse<InstructorCourse[]>>('/api/reports/courses-by-instructor', {
+        params: {
+          ...filters,
+          includeInactive: filters.includeInactive ? 'true' : 'false'
+        }
+      });
+
+      const courses: InstructorCourse[] = response.data.data.map((course) => ({
+        ...course,
+        price: Number(course.price),
+        active: Boolean(course.active),
+        durationHours: Number(course.durationHours || 0),
+        metrics: {
+          salesCount: Number(course.metrics.salesCount || 0),
+          totalRevenue: Number(course.metrics.totalRevenue || 0),
+          enrollments: Number(course.metrics.enrollments || 0),
+          avgProgress: Number(course.metrics.avgProgress || 0),
+          completedCount: Number(course.metrics.completedCount || 0)
+        }
+      }));
+
+      const rawSummary = response.data.summary as Record<string, unknown> | undefined;
+      const summary: InstructorSummary | undefined = rawSummary
+        ? {
+            totalCourses: Number((rawSummary['totalCourses'] as number | undefined) ?? 0),
+            totalSales: Number((rawSummary['totalSales'] as number | undefined) ?? 0),
+            totalRevenue: Number((rawSummary['totalRevenue'] as number | undefined) ?? 0),
+            totalEnrollments: Number((rawSummary['totalEnrollments'] as number | undefined) ?? 0)
+          }
+        : undefined;
+
+      const responseFilters = (response.data as ApiResponse<InstructorCourse[]> & {
+        filters?: {
+          instructorId: string;
+          includeInactive: boolean;
+          category: string | null;
+          startDate: string | null;
+          endDate: string | null;
+        };
+      }).filters;
+
+      return {
+        courses,
+        summary,
+        filters: responseFilters
+      };
     } catch (error) {
       handleError(error);
       throw error;
